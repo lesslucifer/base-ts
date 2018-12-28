@@ -1,0 +1,55 @@
+stages:
+  - test
+#  - production
+#  - beta
+
+unit_test:
+  stage: test
+  image: node:8
+  services:
+    - redis:4.0-alpine
+
+  variables:
+    config: env.test.json
+
+  cache:
+    paths:
+    - node_modules
+
+  before_script:
+    - npm install
+    
+  script:
+    - npm test
+
+deploy_production:
+  stage: production
+  script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$PRODUCTION_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+    - ssh -t $PRODUCTION_SERVER "~/cmd/deploy -e"
+  environment:
+      name: production
+  variables:
+   GIT_STRATEGY: none
+  only:
+    - master
+
+deploy_beta:
+  stage: beta
+  script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$PRODUCTION_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+    - ssh -t $PRODUCTION_SERVER "~/cmd/deploy_beta -e"
+  environment:
+      name: beta
+  variables:
+   GIT_STRATEGY: none
+  only:
+    - develop

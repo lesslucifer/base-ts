@@ -1,0 +1,9 @@
+*.js.map
+*.js
+.vscode
+node_modules
+typings
+.nyc*
+coverage
+dist
+env.json
