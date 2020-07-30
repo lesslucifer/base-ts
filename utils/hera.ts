@@ -5,6 +5,7 @@ import sha1 from 'sha1';
 import crypto = require('crypto');
 import * as randomstring from 'randomstring';
 import * as fs from 'fs-extra';
+import { GQLGlobal, GQLU, GQLQuery } from 'gql-ts';
 
 export type ExpressAsyncRequestHandler = (req: express.Request, resp: express.Response) => Promise<any>;
 export type ExpressSyncRequestHandler = (req: express.Request, resp: express.Response) => any;
@@ -15,6 +16,11 @@ export interface IAppErrorResponse {
     message?: string;
     code?: string;
     params?: any;
+}
+
+export interface IGQLMGQueryPaginationOpts {
+    defaultLimit?: number;
+    maxLimit?: number;
 }
 
 export class AppApiResponse {
@@ -306,6 +312,48 @@ export class Hera {
         }
 
         return null;
+    }
+
+    standardlizePhoneNumber(phone: string, prefix = '84'): string {
+        if (!phone) return phone;
+        if (phone.startsWith(prefix)) {
+            phone = phone.slice(prefix.length);
+        }
+
+        if (phone.startsWith(`+${prefix}`)) {
+            phone = phone.slice(prefix.length + 1);
+        }
+
+        if (phone.startsWith('0')) {
+            phone = phone.slice(1);
+        }
+
+        return phone;
+    }
+
+    mongoEqOrIn(val: any) {
+        if (_.isArray(val)) {
+            if (val.length == 0) return undefined;
+            if (val.length == 1) return _.first(val);
+            return {$in: val};
+        }
+
+        return val;
+    }
+
+    softmax(nums: number[]) {
+        if (nums.length === 0) return nums;
+        const max = Math.max(...nums)
+        const ex = nums.map(x => Math.exp(x - max))
+        const exSum = _.sum(ex)
+        return ex.map(v => v / exSum)
+    }
+
+    createMapByKey<K, V>(arr: V[], key: (v: V) => K) {
+        return arr.reduce((m, v) => {
+            m.set(key(v), v)
+            return m
+        }, new Map());
     }
 }
 

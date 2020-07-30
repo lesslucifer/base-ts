@@ -13,6 +13,10 @@ class Lock {
         })
     }
 
+    isBusy(key: string) {
+        return this.asyncLock.isBusy(key);
+    }
+
     async guard<T>(key: string | string[], f: () => Promise<T>) {
         let _key: LockKey;
         try {

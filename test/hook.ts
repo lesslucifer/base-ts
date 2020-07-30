@@ -4,16 +4,16 @@ if (!process.env.config) {
 
 import * as _ from 'lodash';
 import 'mocha';
-import CONN from '../glob/conn';
 import Program from '../app';
-import ENV from '../glob/env';
-import { RedisAuth } from '../utils/auth';
+import TestUtils from './utils/testutils';
 
 before(async function () {
-    this.timeout(60 * 1000);
+    this.timeout(300 * 1000);
     await Program.main();
+    await TestUtils.initTestData()
 })
 
 after(async function () {
     this.timeout(60 * 1000);
+    await TestUtils.dropDatabase();
 })

@@ -1,16 +1,13 @@
 import * as bodyParser from 'body-parser';
-import { EventEmitter } from 'events';
 import express from 'express';
 import _ from 'lodash';
-import moment from 'moment';
-import * as path from 'path';
 import CONN from './glob/conn';
 import { ENV } from './glob/env';
-import { initModels } from './models/miscs';
-import createSesssionObject from './serv/sess';
-import { ExpressRouter } from './utils/express-router';
-import { APIInfo } from './utils/express-router/api';
-import hera, { AppLogicError } from './utils/hera';
+import hera, { AppLogicError, AppApiResponse } from './utils/hera';
+import { APIInfo, ExpressRouter } from 'express-router-ts';
+import { GQLGlobal } from 'gql-ts';
+import * as Sentry from '@sentry/node';
+import cors from './utils/cors';
 
 
 // Import routers
@@ -18,15 +15,13 @@ export class Program {
     static server: express.Express;
 
     public static async setUp() {
-        await CONN.configureConnections(ENV.DB);
-
-        await initModels();
+        Sentry.init({ dsn: ENV.SENTRY });
+        await CONN.configureConnections(ENV);
 
         const server = express();
         this.server = server;
-        server.use(bodyParser.json());
-
-        server.use(createSesssionObject());
+        server.use(bodyParser.json({limit: '10mb'}));
+        server.all('*', cors());
 
         if (ENV.LOGGING !== false) {
             server.all('*', (req, resp, next) => {
@@ -38,44 +33,22 @@ export class Program {
                 next();
             });
         }
-        
-        // CORS
-        server.all('*', function (req, res, next) {
-            res.header('Access-Control-Allow-Origin', "*");
-            res.header('Access-Control-Allow-Methods', 'OPTIONS, POST, GET, PUT, DELETE');
-            res.header('Access-Control-Allow-Credentials', 'true');
-            res.header('Access-Control-Max-Age', '86400');
-            res.header('Access-Control-Allow-Headers', 'X-Requested-With, X-HTTP-Method-Override, ' +
-                'Content-Type, Accept, Authentication, Authorization, X-Consumer-Username, sess, apikey');
-
-            if (req.method.toUpperCase() == 'OPTIONS') {
-                res.statusCode = 204;
-                res.send();
-                return;
-            }
-
-            next();
-        });
 
         APIInfo.Logging = ENV.LOGGING == true;
         await ExpressRouter.loadDir(server, `${__dirname}/routes`);
 
+        ExpressRouter.ResponseHandler = this.expressRouterResponse.bind(this)
+        ExpressRouter.ErrorHandler = this.expressRouterError.bind(this)
+        
         server.all('*', hera.routeSync(req => {
-            if (req.session.user || req.session.system) throw new AppLogicError(`Permission denied!`, 403);
+            if (req.session.uid || req.session.system) throw new AppLogicError(`Permission denied!`, 403);
             throw new AppLogicError(`Cannot ${req.method} ${req.url}! API not found`, 404);
         }));
-
-        (server as EventEmitter).on(ExpressRouter.MSG_ERR, (err: Error, req: express.Request) => {
-            console.log(`------------------------------------------------------------
-            ${moment().format('DD/MM HH:mm:ss')} (${ENV.NAME || 'Unknown'})
-            ${req.method} ${req.url}
-            ${err.message}` + 
-            '\n```' + err.stack + '```');
-        })
     }
 
     public static async main() {
         await this.setUp();
+
         await new Promise(res => this.server.listen(ENV.HTTP_PORT, () => {
             if (ENV.LOGGING !== false) {
                 console.log(`Listen on port ${ENV.HTTP_PORT}...`);
@@ -84,6 +57,51 @@ export class Program {
         }));
         
         return 0;
+    }
+
+    static expressRouterResponse(data: any, resp: express.Response) {
+        let appResp = new AppApiResponse();
+        if (data instanceof AppApiResponse) {
+            appResp = data;
+        }
+        else {
+            appResp.success = true;
+            appResp.httpCode = 200;
+            appResp.data = data;
+        }
+
+        this.doResponse(appResp, resp);
+    }
+
+    static expressRouterError(err: any, resp: express.Response) {
+        let appResp = new AppApiResponse();
+        appResp.success = false;
+        appResp.err = {
+            message: err.message || 'Unknown error',
+            code: err.code,
+            params: err.params
+        }
+        appResp.httpCode = _.isNumber(err.httpCode) ? err.httpCode : 500;
+
+        // LogServ.logError(err, req);
+        // LogServ.logNotif(LogServ.errMsgs(err, req).join('\n'));
+        this.doResponse(appResp, resp);
+    }
+
+    static doResponse(appResp: AppApiResponse, resp: express.Response) {
+        // Remove http code from response body
+        if (_.isNumber(appResp.httpCode)) {
+            resp.statusCode = appResp.httpCode;
+        }
+        delete appResp.httpCode;
+
+        // Remove headers from response body
+        if (!_.isEmpty(appResp.headers)) {
+            _.keys(appResp.headers).forEach(h => resp.setHeader(h, appResp.headers[h]));
+        }
+        delete appResp.headers;
+
+        resp.send(appResp);
     }
 }
 

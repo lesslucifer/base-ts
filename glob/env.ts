@@ -1,37 +1,51 @@
-import * as path from 'path';
-import newAjv2 from '../utils/ajv2';
 import _ from 'lodash';
+import newAjv2 from '../utils/ajv2';
+import hera from '../utils/hera';
+import { GQLU } from 'gql-ts';
 
 const ajv = newAjv2();
 
-const ajvDBConfig = {
-    '+REDIS': {}
+const ajvConnConfig = {
+    '+@CONN_REDIS': 'string',
 };
-export interface ENV_DB_CONFIG {
-    REDIS: any;
+export interface ENV_CONN_CONFIG {
+    CONN_REDIS: string;
 }
 
-const ajvEnvConfig = ajv({
+const ajvEnvConfig = ajv(_.merge({
     '@NAME': 'string',
-    '@HTTP_PORT': 'integer|>0',
+    '+@HTTP_PORT': 'integer|>0',
     '@LOGGING': 'boolean',
-    '+@DB': ajvDBConfig
-});
-export interface ENV_CONFIG {
-    NAME: string;
+    '+@SENTRY': 'string'
+}, ajvConnConfig));
+export interface ENV_CONFIG extends ENV_CONN_CONFIG {
+    NAME: string; 
     HTTP_PORT?: number;
     LOGGING?: boolean;
-    DB: ENV_DB_CONFIG;
+    SENTRY: string;
 }
 
+const ENV_DEFAULT = {
+}
 
+const envCustomParser = {
+    'HTTP_PORT': hera.parseInt,
+    'LOGGING': GQLU.toBoolean
+}
 
-function loadConfig() {
-    const config = require(path.resolve(process.cwd(), process.env.config || './env.json'));
-    if (ajvEnvConfig(config) != true) {
-        throw new Error(`Invalid config format! ${ajvEnvConfig.errors.map(err => `${err.message} (${err.schemaPath})`).join('\n')}`);
+function loadConfig(): ENV_CONFIG {
+    // console.log('process.env')
+    // console.log(JSON.stringify(process.env, null, 2))
+    const config: any = _.cloneDeep(ENV_DEFAULT);
+    for (const key in process.env) {
+        let val = process.env[key]
+        if (envCustomParser[key]) {
+            val = envCustomParser[key](val)
+        }
+        _.set(config, key, val);
     }
 
+    if (!ajvEnvConfig(config)) throw new Error(`Invalid env config; ${JSON.stringify(ajvEnvConfig.errors, null, 2)}`)
     return config;
 }
 
