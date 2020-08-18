@@ -8,6 +8,7 @@ import { APIInfo, ExpressRouter } from 'express-router-ts';
 import { GQLGlobal } from 'gql-ts';
 import * as Sentry from '@sentry/node';
 import cors from './utils/cors';
+import createSesssionObject from './serv/sess';
 
 
 // Import routers
@@ -21,6 +22,7 @@ export class Program {
         const server = express();
         this.server = server;
         server.use(bodyParser.json({limit: '10mb'}));
+        server.use(createSesssionObject())
         server.all('*', cors());
 
         if (ENV.LOGGING !== false) {
@@ -59,7 +61,7 @@ export class Program {
         return 0;
     }
 
-    static expressRouterResponse(data: any, resp: express.Response) {
+    static expressRouterResponse(data: any, req: express.Request, resp: express.Response) {
         let appResp = new AppApiResponse();
         if (data instanceof AppApiResponse) {
             appResp = data;
@@ -73,7 +75,7 @@ export class Program {
         this.doResponse(appResp, resp);
     }
 
-    static expressRouterError(err: any, resp: express.Response) {
+    static expressRouterError(err: any, req: express.Request, resp: express.Response) {
         let appResp = new AppApiResponse();
         appResp.success = false;
         appResp.err = {
