@@ -1,4 +1,4 @@
-import ajv from 'ajv';
+import Ajv from 'ajv';
 import * as _ from 'lodash';
 
 type SPECIAL_TOKEN = '++';
@@ -126,19 +126,15 @@ function craftStringSchema(schema: string): any {
 
                 let keyword = null;
                 if (cmp == '>') {
-                    if (eq) {
-                        retSch.minimum = val;
-                    }
-                    else {
-                        retSch.exclusiveMinimum = val;
+                    retSch.minimum = val;
+                    if (!eq) {
+                        retSch.exclusiveMinimum = true;
                     }
                 }
                 else if (cmp == '<') {
-                    if (eq) {
-                        retSch.maximum = val;
-                    }
-                    else {
-                        retSch.exclusiveMaximum = val;
+                    retSch.maximum = val;
+                    if (!eq) {
+                        retSch.exclusiveMaximum = true;
                     }
                 }
 
@@ -205,13 +201,13 @@ function craftRawMapSchema(schema: _.Dictionary<any>): any {
     return ret;
 }
 
-export function newAjv2() {
-    const _ajv = ajv();
-    return (sch: any, log: boolean = false) => {
+export function ajv2() {
+    const ajv = new Ajv();
+    return (sch: any, logger?: any) => {
         const ajvSch = craft(sch);
-        if (log) {console.log(JSON.stringify(ajvSch))};
-        return _ajv.compile(ajvSch);
+        if (logger) {logger.debug(JSON.stringify(ajvSch))};
+        return ajv.compile(ajvSch);
     }
 }
 
-export default newAjv2;
+export default ajv2;

@@ -1,14 +1,14 @@
-import moment = require("moment");
+import moment from 'moment';
 
 export class HC {
-    static readonly APP_NAME = 'app_name';
-    static readonly SUCCESS = {};
-    static readonly DATETIME_FMT = 'YY-MM-DD HH:mm:ss'
-    static readonly SHORT_DATE_FMT = 'YYMMDD';
-    static readonly DEFAULT_BIRTHDAY = moment('2010-01-01');
-    static readonly MAX_LIMIT = 1000;
-    static readonly START_YEAR = 2015;
-    static readonly DAY_SECS = 24 * 60 * 60;
-};
+    static readonly APP_NAME = 'APP_NAME';
+
+    static readonly SUCCESS = { success: true };
+    static readonly FAILED = { success: false };
+
+    static readonly MINUTES_PER_DAY = 24 * 60;
+    static readonly FIRST_DAY = moment([2010, 1, 1]);
+    static readonly HUMAN32_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+}
 
 export default HC;

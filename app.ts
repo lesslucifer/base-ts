@@ -1,65 +1,65 @@
 import * as bodyParser from 'body-parser';
 import express from 'express';
-import _ from 'lodash';
+import { APIInfo, ExpressRouter } from 'express-router-ts';
+import { Server } from 'http';
 import CONN from './glob/conn';
 import { ENV } from './glob/env';
-import hera, { AppLogicError, AppApiResponse } from './utils/hera';
-import { APIInfo, ExpressRouter } from 'express-router-ts';
-import { GQLGlobal } from 'gql-ts';
-import * as Sentry from '@sentry/node';
 import cors from './utils/cors';
+import hera, { AppApiResponse, AppLogicError } from './utils/hera';
+import winston = require('winston/lib/winston/config');
+import terminate from './serv/terminate';
+import createSesssionObject from './serv/sess';
+import _ from 'lodash';
 
-
-// Import routers
 export class Program {
     static server: express.Express;
 
-    public static async setUp() {
-        Sentry.init({ dsn: ENV.SENTRY });
+    public static async setup() {
         await CONN.configureConnections(ENV);
+
+        // AuthServ.MODEL = UserServ
 
         const server = express();
         this.server = server;
-        server.use(bodyParser.json({limit: '10mb'}));
+        server.use(bodyParser.json(<any>{limit: '10mb', extended: true}));
+        server.use(createSesssionObject());
         server.all('*', cors());
 
-        if (ENV.LOGGING !== false) {
-            server.all('*', (req, resp, next) => {
-                console.log(`URL: ${req.url}`);
-                if (!_.isEmpty(req.body)) {
-                    console.log(JSON.stringify(req.body, null, 2));
-                }
-
-                next();
-            });
-        }
-
-        APIInfo.Logging = ENV.LOGGING == true;
-        await ExpressRouter.loadDir(server, `${__dirname}/routes`);
-
+        APIInfo.Logging = (winston.npm.levels[ENV.LOG_LEVEL] || 0) > 2 // greater than info level
+        await ExpressRouter.loadDir(server, `${__dirname}/routes`, {
+            log: console.error.bind(console)
+        })
+        // Express router
         ExpressRouter.ResponseHandler = this.expressRouterResponse.bind(this)
         ExpressRouter.ErrorHandler = this.expressRouterError.bind(this)
-        
-        server.all('*', hera.routeSync(req => {
-            if (req.session.uid || req.session.system) throw new AppLogicError(`Permission denied!`, 403);
-            throw new AppLogicError(`Cannot ${req.method} ${req.url}! API not found`, 404);
-        }));
+        server.all('*', (req, resp) => {
+            if (req.session.user || req.session.system) return this.expressRouterError(new AppLogicError(`Permission denied!`, 403), req, resp);
+            return this.expressRouterError(new AppLogicError(`Cannot ${req.method} ${req.url}! API not found`, 404), req, resp)
+        });
     }
 
-    public static async main() {
-        await this.setUp();
+    public static async main(): Promise<number> {
+        await this.setup()
 
-        await new Promise(res => this.server.listen(ENV.HTTP_PORT, () => {
-            if (ENV.LOGGING !== false) {
-                console.log(`Listen on port ${ENV.HTTP_PORT}...`);
-            }
-            res();
-        }));
-        
+        const appServer = await new Promise<Server>(resolve => {
+            resolve(
+                this.server.listen(ENV.HTTP_PORT, () => console.log(`Listen on port ${ENV.HTTP_PORT}...`))
+            )
+        });
+
+        const exitHandler = terminate(appServer, {
+            coredump: false,
+            timeout: 500
+        })
+        process.on('uncaughtException', exitHandler(1, 'Unexpected Error'))
+        process.on('unhandledRejection', exitHandler(1, 'Unhandled Promise'))
+        process.on('SIGTERM', exitHandler(0, 'SIGTERM'))
+        process.on('SIGINT', exitHandler(0, 'SIGINT'))
+
         return 0;
     }
 
-    static expressRouterResponse(data: any, resp: express.Response) {
+    static expressRouterResponse(data: any, req: express.Request, resp: express.Response) {
         let appResp = new AppApiResponse();
         if (data instanceof AppApiResponse) {
             appResp = data;
@@ -73,7 +73,7 @@ export class Program {
         this.doResponse(appResp, resp);
     }
 
-    static expressRouterError(err: any, resp: express.Response) {
+    static expressRouterError(err: any, req: express.Request, resp: express.Response) {
         let appResp = new AppApiResponse();
         appResp.success = false;
         appResp.err = {
@@ -83,8 +83,7 @@ export class Program {
         }
         appResp.httpCode = _.isNumber(err.httpCode) ? err.httpCode : 500;
 
-        // LogServ.logError(err, req);
-        // LogServ.logNotif(LogServ.errMsgs(err, req).join('\n'));
+        console.error(err, req);
         this.doResponse(appResp, resp);
     }
 

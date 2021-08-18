@@ -1,8 +1,14 @@
 import { ExpressRouter, GET } from "express-router-ts";
 import HC from "../glob/hc";
+import { DocSuccessResponse } from "../utils/decors";
 
 class HealthCheckRouter extends ExpressRouter {
-    @GET({path: ""})
+    document = {
+        'tags': ['Ultilities']
+    }
+    
+    @DocSuccessResponse()
+    @GET({path: "/"})
     async checkHealth() {
         return HC.SUCCESS
     }
