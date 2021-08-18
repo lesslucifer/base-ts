@@ -5,7 +5,7 @@ import { Server } from 'http';
 import CONN from './glob/conn';
 import { ENV } from './glob/env';
 import cors from './utils/cors';
-import hera, { AppApiResponse, AppLogicError } from './utils/hera';
+import { AppApiResponse, AppLogicError } from './utils/hera';
 import winston = require('winston/lib/winston/config');
 import terminate from './serv/terminate';
 import createSesssionObject from './serv/sess';
