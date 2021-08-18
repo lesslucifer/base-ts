@@ -17,7 +17,7 @@ const ajvEnvConfig = ajv({
 })
 
 const ENV_DEFAULT: Partial<ENV_CONFIG> = {
-    HTTP_PORT: 4887,
+    HTTP_PORT: 3000,
     LOG_LEVEL: 'debug'
 }
 
