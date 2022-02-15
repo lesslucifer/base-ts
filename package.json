@@ -43,7 +43,7 @@
     "typescript": "^3.9.5",
     "typescript-retry-decorator": "^1.5.1",
     "uuid": "^8.3.0",
-    "vm2": "^3.9.2",
+    "vm2": "^3.9.6",
     "winston": "^3.3.3"
   },
   "devDependencies": {
